@@ -1,0 +1,146 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Matchday Stadium Ticketing System</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+  <script src="https://unpkg.com/html5-qrcode"></script>
+  <style>
+    body { background-color: #0b0f19; color: #f3f4f6; font-family: system-ui, -apple-system, sans-serif; }
+    .glass-card { background: rgba(17, 24, 39, 0.8); border: 1px solid rgba(255, 255, 255, 0.08); backdrop-filter: blur(12px); border-radius: 12px; }
+  </style>
+</head>
+<body class="min-h-screen p-4 md:p-8">
+  <div class="max-w-4xl mx-auto space-y-6">
+    <header class="glass-card p-6 flex justify-between items-center">
+      <div>
+        <h1 class="text-2xl font-bold text-emerald-400">Matchday Pass Ops</h1>
+        <p class="text-sm text-gray-400">Stadium Ticketing & Access Portal</p>
+      </div>
+      <div id="authStatus" class="text-right"></div>
+    </header>
+
+    <div id="loginView" class="glass-card p-6 max-w-md mx-auto space-y-4">
+      <h2 class="text-xl font-bold text-center">Portal Login</h2>
+      <div>
+        <label class="text-sm text-gray-400">Select Role</label>
+        <select id="roleSelect" class="w-full mt-1 p-3 bg-gray-800 border border-gray-700 rounded-lg text-white">
+          <option value="manager">Manager Ops (MANAGER)</option>
+          <option value="seller">Box Seller (SELLER)</option>
+          <option value="gate_staff">Gate Staff (GATE)</option>
+        </select>
+      </div>
+      <div>
+        <label class="text-sm text-gray-400">4-Digit Security PIN</label>
+        <input type="password" id="pinInput" maxlength="4" placeholder="••••" class="w-full mt-1 p-3 bg-gray-800 border border-gray-700 rounded-lg text-center text-xl tracking-widest text-white">
+      </div>
+      <button onclick="handleLogin()" class="w-full py-3 bg-emerald-600 hover:bg-emerald-500 rounded-lg font-bold">Authenticate Portal →</button>
+      <p id="loginError" class="text-red-400 text-sm text-center hidden">Invalid PIN code</p>
+    </div>
+
+    <div id="appView" class="hidden space-y-6">
+      <!-- Dynamic View Area -->
+    </div>
+  </div>
+
+  <script>
+    // Initial system state
+    const DEFAULT_STATE = {
+      users: { manager: '1111', seller: '2222', gate_staff: '3333' },
+      matches: [{ id: 'm1', home: 'FC Barcelona', away: 'Real Madrid', date: '2026-10-15T20:00', venue: 'Main Stadium', prices: { 'Gate A': 25, 'Gate B': 25, 'VIP': 100 } }],
+      tickets: [],
+      paymentInfo: 'Bank Account: 1234-5678-9012\nAccount Name: Stadium Ops Ltd'
+    };
+
+    let state = JSON.parse(localStorage.getItem('stadium_ops_data')) || DEFAULT_STATE;
+    let currentUser = null;
+
+    function saveState() {
+      localStorage.setItem('stadium_ops_data', JSON.stringify(state));
+    }
+
+    function handleLogin() {
+      const role = document.getElementById('roleSelect').value;
+      const pin = document.getElementById('pinInput').value;
+      if (state.users[role] === pin) {
+        currentUser = role;
+        document.getElementById('loginView').classList.add('hidden');
+        document.getElementById('appView').classList.remove('hidden');
+        renderHeader();
+        renderDashboard();
+      } else {
+        document.getElementById('loginError').classList.remove('hidden');
+      }
+    }
+
+    function renderHeader() {
+      document.getElementById('authStatus').innerHTML = `
+        <span class="inline-block px-3 py-1 bg-emerald-500/20 text-emerald-400 rounded-full text-sm capitalize font-bold">${currentUser}</span>
+        <button onclick="logout()" class="ml-2 text-sm text-red-400 underline">Logout</button>
+      `;
+    }
+
+    function logout() {
+      currentUser = null;
+      document.getElementById('appView').classList.add('hidden');
+      document.getElementById('loginView').classList.remove('hidden');
+      document.getElementById('pinInput').value = '';
+    }
+
+    function renderDashboard() {
+      const container = document.getElementById('appView');
+      if (currentUser === 'manager') {
+        container.innerHTML = `
+          <div class="glass-card p-6 space-y-4">
+            <h2 class="text-xl font-bold">Manager Control Dashboard</h2>
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <div class="p-4 bg-gray-800/50 rounded-lg">
+                <p class="text-sm text-gray-400">Total Revenue</p>
+                <p class="text-2xl font-bold text-emerald-400">$${state.tickets.reduce((a,b)=>a+b.price,0)}</p>
+              </div>
+              <div class="p-4 bg-gray-800/50 rounded-lg">
+                <p class="text-sm text-gray-400">Tickets Sold</p>
+                <p class="text-2xl font-bold">${state.tickets.length}</p>
+              </div>
+              <div class="p-4 bg-gray-800/50 rounded-lg">
+                <p class="text-sm text-gray-400">Admissions</p>
+                <p class="text-2xl font-bold text-blue-400">${state.tickets.filter(t=>t.status==='used').length}</p>
+              </div>
+            </div>
+
+            <div class="pt-4 border-t border-gray-800">
+              <h3 class="font-bold mb-2">Scheduled Matches</h3>
+              <div class="space-y-2">
+                ${state.matches.map(m => `
+                  <div class="flex justify-between items-center p-3 bg-gray-800/40 rounded">
+                    <div>
+                      <p class="font-bold">${m.home} vs ${m.away}</p>
+                      <p class="text-xs text-gray-400">${new Date(m.date).toLocaleString()} - ${m.venue}</p>
+                    </div>
+                    <button onclick="deleteMatch('${m.id}')" class="px-3 py-1 bg-red-600/20 text-red-400 border border-red-500/30 rounded text-sm hover:bg-red-600 hover:text-white">🗑️ Delete Match</button>
+                  </div>
+                `).join('')}
+              </div>
+            </div>
+          </div>
+        `;
+      } else {
+        container.innerHTML = `
+          <div class="glass-card p-6">
+            <h2 class="text-xl font-bold">Active Role: ${currentUser.toUpperCase()}</h2>
+            <p class="text-gray-400 mt-2">Terminal operational and connected.</p>
+          </div>
+        `;
+      }
+    }
+
+    function deleteMatch(id) {
+      state.matches = state.matches.filter(m => m.id !== id);
+      saveState();
+      renderDashboard();
+    }
+  </script>
+</body>
+</html>
